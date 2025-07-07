@@ -12,72 +12,53 @@ import (
 	"path/filepath"
 )
 
-type response = func(http.ResponseWriter, ...any)
-type customResponse = func(http.ResponseWriter, int, ...any)
-
-type ApiResponses struct {
-	Ok              response
-	Created         response
-	NoContent       response
-	ServerError     response
-	NotFound        response
-	Unauthorized    response
-	Forbidden       response
-	TooManyRequests response
-	BadRequest      response
-	Send            customResponse
-	Gzip            func(w http.ResponseWriter, status int, data ...any)
-	StreamBytes     func(w http.ResponseWriter, status int, bytes []byte, name string)
-	StreamFile      func(w http.ResponseWriter, status int, binPath string, name string)
-}
-
 var Response = ApiResponses{
 	/* 100 */
 
 	/* 200 */
 	Ok: func(w http.ResponseWriter, data ...any) {
-		send(w, 200, data)
+		Send(w, 200, data)
 	},
 
 	Created: func(w http.ResponseWriter, data ...any) {
-		send(w, 201, data)
+		Send(w, 201, data)
 	},
 
 	NoContent: func(w http.ResponseWriter, data ...any) {
-		send(w, 204, nil)
+		Send(w, 204, nil)
 	},
 
 	/* 300 */
 
 	/* 400 */
 	BadRequest: func(w http.ResponseWriter, data ...any) {
-		send(w, http.StatusBadRequest, data)
+		Send(w, http.StatusBadRequest, data)
 	},
 
 	Unauthorized: func(w http.ResponseWriter, data ...any) {
-		send(w, http.StatusUnauthorized, data)
+		Send(w, http.StatusUnauthorized, data)
 	},
 
 	Forbidden: func(w http.ResponseWriter, data ...any) {
-		send(w, http.StatusForbidden, data)
+		Send(w, http.StatusForbidden, data)
 	},
 
 	NotFound: func(w http.ResponseWriter, data ...any) {
-		send(w, http.StatusNotFound, data)
+		Send(w, http.StatusNotFound, data)
 	},
 
 	TooManyRequests: func(w http.ResponseWriter, data ...any) {
-		send(w, http.StatusTooManyRequests, data)
+		Send(w, http.StatusTooManyRequests, data)
 	},
 
 	/* 500 */
 	ServerError: func(w http.ResponseWriter, data ...any) {
-		send(w, http.StatusInternalServerError, data)
+		Send(w, http.StatusInternalServerError, data)
 	},
 
 	/* Misc */
 	Send: func(w http.ResponseWriter, status int, data ...any) {
-		send(w, status, data)
+		Send(w, status, data)
 	},
 
 	Gzip: func(w http.ResponseWriter, status int, data ...any) {
@@ -93,7 +74,12 @@ var Response = ApiResponses{
 
 	StreamFile: func(w http.ResponseWriter, status int, binPath string, name string) {
 
-		f, _ := os.Open(binPath)
+		f, err := os.Open(binPath)
+		if err != nil {
+			//Send server error
+			Send(w, http.StatusInternalServerError, nil)
+			return
+		}
 		defer f.Close()
 
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -114,8 +100,14 @@ var Response = ApiResponses{
 	},
 }
 
-func send(w http.ResponseWriter, status int, data any) {
+func Send(w http.ResponseWriter, status int, data any) {
+	if status == http.StatusNoContent {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	switch v := data.(type) {
+	// If only one argument passed, unwrap it from slice
 	case []any:
 		if len(v) == 1 {
 			data = v[0]
@@ -123,7 +115,7 @@ func send(w http.ResponseWriter, status int, data any) {
 	}
 
 	var buf bytes.Buffer
-	if status == 204 || data != nil {
+	if data != nil {
 		err := json.NewEncoder(&buf).Encode(data)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -149,7 +141,7 @@ func zip(w http.ResponseWriter, status int, data ...any) {
 
 	// Set headers
 	w.Header().Set("Content-Encoding", "gzip")
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "application/json")
 
 	gz := gzip.NewWriter(w)
 	defer gz.Close()
