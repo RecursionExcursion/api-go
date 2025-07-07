@@ -1,39 +1,37 @@
-# 🌐 api-go/api
+# <img src="https://golang.org/favicon.ico" width="24" alt="Go logo"> api-go/api (1.0.0)
 
-A lightweight HTTP server and response helper package for quickly bootstrapping Go APIs with clean routing, structured responses, gzip support, and middleware chaining.
 
----
+A lightweight, dependency-free HTTP helper library for building Go APIs quickly and cleanly — with routing, structured responses, gzip streaming, and extensible middleware support.
+## Features
 
-## 🚀 Features
-
-- Custom router based on `http.ServeMux`
+- http.ServeMux-based routing
+- Declarative route + method bindings (e.g., "GET /users")
 - Middleware chaining
-- Route + method binding
 - Structured JSON responses
-- GZIP responses and binary streaming support
-- Named helper functions for common HTTP statuses
+- GZIP + binary streaming support
+- Predefined helpers for common status codes
+- Auto-cleanup for streamed temp files
+- Simple, idiomatic Go — no external dependencies
 
----
+## Package Overview
+### APIServer
 
-## 📦 Package Overview
-
-### 🔧 Server: `APIServer`
+The core HTTP server abstraction:
 
 ```go
 type APIServer struct {
-	Addr        string
-	Server      http.Server
-	Router      *http.ServeMux
+	Addr   string
+	Server http.Server
+	Router *http.ServeMux
 }
 ```
 
-✅ Usage
+#### Usage Example
 
 ```go
 import "github.com/RecursionExcursion/api-go/api"
 
 func main() {
-
 	routes := []api.RouteHandler{
 		{
 			MethodAndPath: "GET /hello",
@@ -43,13 +41,12 @@ func main() {
 		},
 	}
 
-	server := api.NewApiServer(":8080",routes)
-
+	server := api.NewApiServer(":8080", routes)
 	server.ListenAndServe()
 }
 ```
 
-🧱 RouteHandler
+### RouteHandler
 
 ```go
 type RouteHandler struct {
@@ -59,60 +56,95 @@ type RouteHandler struct {
 }
 ```
 
-Supports middleware chaining via:
+- MethodAndPath: Supports "METHOD /path" (e.g., "POST /users")
+- Middleware: Executed left-to-right (wraps the handler)
+
+Middleware signature:
 
 ```go
 type Middleware = func(HandlerFn) HandlerFn
 ```
 
-Middleware are executed left-to-right (top-down).
-🧰 HTTP Method Generator
+### Method Generator
+
+Generate REST-style route strings dynamically:
 
 ```go
-api.HttpMethodGenerator("/base")("users") // returns HTTPMethods{GET: "GET /base/users", ...}
+gen := api.HttpMethodGenerator("/users")
+paths := gen("profile")
+
+fmt.Println(paths.GET) // "GET /users/profile"
 ```
 
-Use it to cleanly assign route strings.
-📤 Structured Responses: api.Response
+Helpful for grouping method routes under a shared base.
 
-Built-in helpers for consistent API responses:
-✅ Status Shortcuts
+### Structured Responses
+
+The api.Response object provides clean, consistent helpers for writing JSON responses:
+#### Status Shortcuts
 
 ```go
-api.Response.Ok(w, data)
-api.Response.Created(w, data)
-api.Response.BadRequest(w, data)
-api.Response.Unauthorized(w, data)
-api.Response.ServerError(w, data)
-...
+api.Response.Ok(w, data)             // 200 OK
+api.Response.Created(w, data)        // 201 Created
+api.Response.NoContent(w)            // 204 No Content
+api.Response.BadRequest(w, data)     // 400 Bad Request
+api.Response.Unauthorized(w, data)   // 401 Unauthorized
+api.Response.Forbidden(w, data)      // 403 Forbidden
+api.Response.NotFound(w, data)       // 404 Not Found
+api.Response.ServerError(w, data)    // 500 Internal Server Error
 ```
 
-🔄 Custom Send
+#### Custom Status
 
 ```go
 api.Response.Send(w, 418, "I'm a teapot ☕")
 ```
 
-📦 GZIP Support
+#### GZIP Support
 
 ```go
-api.Response.Gzip(w, 200, data)
+api.Response.Gzip(w, 200, largePayload)
 ```
 
-📁 File Streaming
+#### Binary File Streaming
 
 ```go
-api.Response.StreamFile(w, 200, "/tmp/file.zip", "download.zip")
+api.Response.StreamFile(w, 200, "/tmp/archive.zip", "download.zip")
 ```
 
-🧼 Cleanup and Logging
+Automatically sets headers and removes temp directory.
 
-    Temp files streamed with StreamFile are deleted automatically
+### Middleware Examples
 
-    Stream errors are logged
+Your own middleware functions can be chained per route:
 
-    JSON errors result in 500 Internal Server Error
+```go
+api.Middleware = func(next api.HandlerFn) api.HandlerFn {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Println("Request started")
+		next(w, r)
+		log.Println("Request finished")
+	}
+}
+```
 
+Or use built-in patterns:
+
+- LoggerMW: Simple request logging
+- KeyAuthMW: Header-based key authentication
+- RecoveryMW: Catch and log panics
+- TimeoutMW: Add per-request timeouts
+- CustomKeyAuthMW(...): Supply custom validator, header, and bearer toggle
+
+### Utilities
+Parse Body to Type
+
+```go
+user, err := api.DecodeJSON[User](r)
+```
+
+Reads and unmarshals JSON into your struct.
+ 
 📄 License
 
 MIT © RecursionExcursion
