@@ -25,7 +25,7 @@ func (pb *PathBuilder) Append(parts ...string) PathBuilder {
 	return PathBuilder{base: newPath}
 }
 
-func (pb *PathBuilder) Methods(base string) HTTPMethods {
+func (pb *PathBuilder) Methods() HTTPMethods {
 
 	assign := func(method string) string {
 		return fmt.Sprintf("%v %v", method, pb.base)
